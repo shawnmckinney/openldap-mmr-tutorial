@@ -11,6 +11,8 @@ This tutorial will use OpenLDAP for Linux: 2.4.48.1
 
 ## Prerequisites
 
+Note: These steps have been performed on the virtual box VM supplied as part of the class.
+
 * RHEL7 or Centos7
 
 Run commands as root.
