@@ -1,3 +1,6 @@
+# Copyright (c) 2002-2019 by Symas Corporation
+# All rights reserved.
+
 # openldap-mmr-tutorial
 
 Contains documentation and config to setup an openldap cascading replica cluster designed for the classroom.

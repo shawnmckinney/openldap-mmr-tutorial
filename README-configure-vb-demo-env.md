@@ -1,3 +1,6 @@
+# Copyright (c) 2002-2015 by Symas Corporation
+# All rights reserved.
+
 # Configure VirtualBox Demo Environment
 
 ## Copy all files from the flash drive provided to your computer.
