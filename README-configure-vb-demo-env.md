@@ -68,10 +68,18 @@ to 250% to make the screen larger:
 
 <img src="images/55-install-destination.png" height="250">
 
-15. Installation Source will now say "Automatic partioning selected", so click Begin Installation to continue:
+15. Installation Source will now say "Automatic partioning selected":
 
 <img src="images/53-install-destination.png" height="275">
 
-16. While the installation of Centos 7 continues, set the root password and set up a first user account:
+16. Next step will be to set up the network configuration, so click on "Network & Host Name":
+
+<img src="images/58-network-setup.png" height="275">
+
+17. Click the toggle switch to enable network connectivity, then click Done:
+
+<img src="images/58-network-config.png" height="275">
+
+18. While the installation of Centos 7 continues, set the root password and set up a first user account:
 
 <img src="images/65-set-root-pw.png" height="100">
