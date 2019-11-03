@@ -1,0 +1,479 @@
+#!/usr/bin/python
+
+#
+# Script to check LDAP syncrepl replication state between two servers.
+# One server is consider as provider and the other as consumer.
+#
+# This script can check replication state with two method :
+#  - by the fisrt, entryCSN of all entries of LDAP directory will be
+#    compare between two servers
+#  - by the second, all values of all atributes of all entries will
+#    be compare between two servers.
+#
+# In all case, contextCSN of servers will be compare and entries not
+# present in consumer or in provider will be notice. You can decide to
+# disable contextCSN verification by using argument --no-check-contextCSN.
+#
+# This script is also able to "touch" LDAP object on provider to force
+# synchronisation of this object. This mechanism consist to add '%%TOUCH%%'
+# value to an attribute of this object and remove it just after. The
+# touched attribute is specify by parameter --touch. Of course, couple of
+# DN and password provided, must have write right on this attribute.
+#
+# If your prefer, you can use --replace-touch parameter to replace value
+# of touched attribute instead of adding the touched value. Use-ful in
+# case of single-value attribute.
+#
+# This script could be use as Nagios plugin (-n argument)
+#
+# Requirement : 
+# A single couple of DN and password able to connect to both server 
+# and without restriction to retrieve objects from servers.
+#
+# Author : Benjamin Renard <brenard@easter-eggs.com>
+# Date : Mon, 10 Dec 2012 18:04:24 +0100
+# Source : http://git.zionetrix.net/check_syncrepl_extended
+#
+
+import ldap
+from ldap.controls import SimplePagedResultsControl
+import ldap.modlist as modlist
+import logging
+import sys
+import getpass
+
+from optparse import OptionParser
+
+TOUCH_VALUE='%%TOUCH%%'
+
+parser = OptionParser(version="%prog version 1.0\n\nDate : Mon, 10 Dec 2012 18:04:24 +0100\nAuthor : Benjamin Renard <brenard@easter-eggs.com>\nSource : http://git.zionetrix.net/check_syncrepl_extended")
+
+parser.add_option(	"-p", "--provider",
+			dest="provider",
+			action="store",
+			type='string',
+			help="LDAP provider URI (example : ldaps://ldapmaster.foo:636)")
+
+parser.add_option(	"-c", "--consumer",
+			dest="consumer",
+			action="store",
+			type='string',
+			help="LDAP consumer URI (example : ldaps://ldapslave.foo:636)")
+
+parser.add_option(	"-i", "--serverID",
+			dest="serverid",
+			action="store",
+			type='int',
+			help="Compare contextCSN of a specific master. Useful in MultiMaster setups where each master has a unique ID and a contextCSN for each replicated master exists. A valid serverID is a integer value from 0 to 4095 (limited to 3 hex digits, example: '12' compares the contextCSN matching '#00C#')",
+			default=False)
+
+parser.add_option(	"-T", "--starttls",
+			dest="starttls",
+			action="store_true",
+			help="Start TLS on LDAP provider/consumers connections",
+			default=False)
+
+parser.add_option(	"-D", "--dn",
+			dest="dn",
+			action="store",
+			type='string',
+			help="LDAP bind DN (example : uid=nagios,ou=sysaccounts,o=example")
+
+parser.add_option(	"-P", "--pwd",
+			dest="pwd",
+			action="store",
+			type='string',
+			help="LDAP bind password",
+			default=None)
+
+parser.add_option(	"-b", "--basedn",
+			dest="basedn",
+			action="store",
+			type='string',
+			help="LDAP base DN (example : o=example)")
+
+parser.add_option(	"-f", "--filter",
+			dest="filter",
+			action="store",
+			type='string',
+			help="LDAP filter (default : (objectClass=*))",
+			default='(objectClass=*)')
+
+parser.add_option(	"-d", "--debug",
+			dest="debug",
+			action="store_true",
+			help="Debug mode",
+			default=False)
+
+parser.add_option(	"-n", "--nagios",
+			dest="nagios",
+			action="store_true",
+			help="Nagios check plugin mode",
+			default=False)
+
+parser.add_option(	"-q", "--quiet",
+			dest="quiet",
+			action="store_true",
+			help="Quiet mode",
+			default=False)
+
+parser.add_option(	"--no-check-certificate",
+			dest="nocheckcert",
+			action="store_true",
+			help="Don't check the server certificate (Default : False)",
+			default=False)
+
+parser.add_option(	"--no-check-contextCSN",
+			dest="nocheckcontextcsn",
+			action="store_true",
+			help="Don't check servers contextCSN (Default : False)",
+			default=False)
+
+parser.add_option(	"-a", "--attributes",
+			dest="attrs",
+			action="store_true",
+			help="Check attributes values (Default : check only entryCSN)",
+			default=False)
+
+parser.add_option(	"--exclude-attributes",
+			dest="excl_attrs",
+			action="store",
+			type='string',
+			help="Don't check this attribut (only in attribute check mode)",
+			default=None)
+
+parser.add_option(	"--touch",
+			dest="touch",
+			action="store",
+			type='string',
+			help="Touch attribute giving in parameter to force resync a this LDAP object from provider. A value '%s' will be add to this attribute and remove after. The user use to connect to the LDAP directory must have write permission on this attribute on each object." % TOUCH_VALUE,
+			default=None)
+
+parser.add_option(	"--replace-touch",
+			dest="replacetouch",
+			action="store_true",
+			help="In touch mode, replace value instead of adding.",
+			default=False)
+
+parser.add_option(	"--page-size",
+			dest="page_size",
+			action="store",
+			type='int',
+			help="Page size : if defined, paging control using LDAP v3 extended control will be enabled.",
+			default=None)
+
+(options, args) = parser.parse_args()
+
+if not options.provider or not options.consumer:
+	print "You must provide provider and customer URI"
+	if options.nagios:
+		sys.exit(3)
+	sys.exit(1)
+
+if not options.basedn:
+	print "You must provide base DN of connection to LDAP servers"
+	if options.nagios:
+		sys.exit(3)
+	sys.exit(1)
+
+if not 0 <= options.serverid <= 4095:
+	print "ServerID should be a integer value from 0 to 4095 (limited to 3 hexadecimal digits)."
+	if options.nagios:
+		sys.exit(3)
+	sys.exit(1)
+
+if options.touch and not options.attrs:
+	logging.info('Force option attrs on touch mode')
+	options.attrs=True
+
+if options.dn and options.pwd is None:
+	options.pwd=getpass.getpass()
+
+excl_attrs=[]
+if options.excl_attrs:
+	for ex in options.excl_attrs.split(','):
+		excl_attrs.append(ex.strip())
+
+FORMAT="%(asctime)s - %(levelname)s : %(message)s"
+
+if options.debug:
+	logging.basicConfig(level=logging.DEBUG,format=FORMAT)
+	ldap.set_option(ldap.OPT_DEBUG_LEVEL,0)
+	ldapmodule_trace_level = 1
+	ldapmodule_trace_file = sys.stderr
+elif options.nagios:
+	logging.basicConfig(level=logging.ERROR,format=FORMAT)
+elif options.quiet:
+	logging.basicConfig(level=logging.WARNING,format=FORMAT)
+else:
+	logging.basicConfig(level=logging.INFO,format=FORMAT)
+
+class LdapServer(object):
+
+	uri = ""
+	dn = ""
+	pwd = ""
+	start_tls = False
+
+	con = 0
+
+	def __init__(self,uri,dn,pwd, start_tls=False, page_size=None):
+		self.uri	= uri
+		self.dn		= dn
+		self.pwd	= pwd
+		self.start_tls	= start_tls
+		self.page_size	= page_size
+
+	def connect(self):
+		if self.con == 0:
+			try:
+				con = ldap.initialize(self.uri)
+				con.protocol_version = ldap.VERSION3
+				if self.start_tls:
+					con.start_tls_s()
+				if self.dn:
+					con.simple_bind_s(self.dn,self.pwd)
+				self.con = con
+				return True
+			except ldap.LDAPError, e:
+				logging.error("LDAP Error : %s" % e)
+				return
+
+	def getContextCSN(self,basedn=False,serverid=False):
+		if not basedn:
+			basedn=self.dn
+		data=self.search(basedn,'(objectclass=*)',['contextCSN'])
+		if len(data)>0:
+			contextCSNs=data[0][0][1]['contextCSN']
+			logging.debug('Found contextCSNs %s' % contextCSNs)
+			if serverid is False:
+				return contextCSNs[0]
+			else:
+				csnid=str(format(serverid, 'X')).zfill(3)
+				sub='#%s#' % csnid
+				CSN=[s for s in contextCSNs if sub in s]
+				if not CSN:
+					logging.error("No contextCSN matching with ServerID %s (=%s) could be found." % (serverid,sub))
+					return False
+				else:
+					return CSN[0]
+		else:
+			return False
+
+	def search(self,basedn,filter,attrs):
+		if self.page_size:
+			return self.paged_search(basedn,filter,attrs)
+		res_id = self.con.search(basedn,ldap.SCOPE_SUBTREE,filter,attrs)
+		ret = []
+		while 1:
+			res_type, res_data = self.con.result(res_id,0)
+			if res_data == []:
+				break
+			else:
+				if res_type == ldap.RES_SEARCH_ENTRY:
+					ret.append(res_data)
+		return ret
+
+	def paged_search(self,basedn,filter,attrs):
+		ret = []
+		page = 0
+		pg_ctrl = SimplePagedResultsControl(True, self.page_size, '')
+		pg_oid = SimplePagedResultsControl.controlType
+		while page == 0 or pg_ctrl.cookie:
+			page += 1
+			logging.debug('Page search : loading page %d' % page)
+			res_id = self.con.search_ext(basedn,ldap.SCOPE_SUBTREE,filter,attrs,serverctrls=[pg_ctrl])
+			res_type, res_data, res_id, serverctrls = self.con.result3(res_id)
+			for serverctrl in serverctrls:
+				if serverctrl.controlType == pg_oid:
+					pg_ctrl.cookie = serverctrl.cookie
+			for item in res_data:
+			  ret.append([item])
+		return ret
+
+	def update_object(self,dn,old,new):
+		ldif = modlist.modifyModlist(old,new)
+		if ldif == []:
+			return True
+		try:
+			logging.debug('Update object %s : %s' % (dn,ldif))
+			self.con.modify_s(dn,ldif)
+			return True
+		except ldap.LDAPError, e:
+			logging.error('Error updating object %s : %s' % (dn,e))
+		return False
+
+	def get_attr(self,obj,attr):
+		if attr in obj[0][1]:
+			return obj[0][1][attr]
+		return []
+
+	def touch_object(self,dn,attr,orig_value):
+		if options.replacetouch:
+			new_value=[TOUCH_VALUE]
+		else:
+			new_value=list(orig_value)
+			new_value.append(TOUCH_VALUE)
+		try:
+			logging.info('Add value "%s" to attribute %s of object %s' % (TOUCH_VALUE,attr,dn))
+			if self.update_object(dn,{attr: orig_value}, {attr: new_value}):
+				logging.info('Remove value "%s" to attribute %s of object %s' % (TOUCH_VALUE,attr,dn))
+				self.update_object(dn,{attr: new_value}, {attr: orig_value})
+				return True
+		except ldap.LDAPError, e:
+			logging.error('Error touching object %s : %s' % (dn,e))
+		return False
+
+if options.nocheckcert:
+	ldap.set_option(ldap.OPT_X_TLS_REQUIRE_CERT,ldap.OPT_X_TLS_NEVER)
+
+servers=[options.provider,options.consumer]
+
+LdapServers={}
+LdapObjects={}
+LdapServersCSN={}
+
+for srv in servers:
+	logging.info('Connect to %s' % srv)
+	LdapServers[srv]=LdapServer(srv, options.dn, options.pwd, options.starttls, page_size=options.page_size)
+
+	if not LdapServers[srv].connect():
+		if options.nagios:
+			print "UNKWNON - Failed to connect to %s" % srv
+			sys.exit(3)
+		else:
+			sys.exit(1)
+
+	if not options.nocheckcontextcsn:
+		LdapServersCSN[srv]=LdapServers[srv].getContextCSN(options.basedn,options.serverid)
+		logging.info('ContextCSN of %s : %s' % (srv, LdapServersCSN[srv]))
+
+	logging.info('List objects from %s' % srv)
+	LdapObjects[srv]={}
+
+	if options.attrs:
+		for obj in LdapServers[srv].search(options.basedn,options.filter,[]):
+			logging.debug('Found on %s : %s' % (srv,obj[0][0]))
+			LdapObjects[srv][obj[0][0]]=obj[0][1]
+	else:
+		for obj in LdapServers[srv].search(options.basedn,options.filter,['entryCSN']):
+			logging.debug('Found on %s : %s / %s' % (srv,obj[0][0],obj[0][1]['entryCSN'][0]))
+			LdapObjects[srv][obj[0][0]]=obj[0][1]['entryCSN'][0]
+
+	logging.info('%s objects founds' % len(LdapObjects[srv]))
+
+
+not_found={}
+not_sync={}
+
+for srv in servers:
+	not_found[srv]=[]
+	not_sync[srv]=[]
+
+if options.attrs:
+	logging.info("Check if objects a are synchronized (by comparing attributes's values)")
+else:
+	logging.info('Check if objets are synchronized (by comparing entryCSN)')
+for obj in LdapObjects[options.provider]:
+	logging.debug('Check obj %s' % (obj))
+	for srv in LdapObjects:
+		if srv == options.provider:
+			continue
+		if obj in LdapObjects[srv]:
+			touch=False
+			if LdapObjects[options.provider][obj] != LdapObjects[srv][obj]:
+				if options.attrs:
+					attrs_list=[]
+					for attr in LdapObjects[options.provider][obj]:
+						if attr in excl_attrs:
+							continue
+						if attr not in LdapObjects[srv][obj]:
+							attrs_list.append(attr)
+							logging.debug("Obj %s not synchronized : %s not present on %s" % (obj,','.join(attrs_list),srv))
+							touch=True
+						else:
+							LdapObjects[srv][obj][attr].sort()
+							LdapObjects[options.provider][obj][attr].sort()
+							if LdapObjects[srv][obj][attr]!=LdapObjects[options.provider][obj][attr]:
+								attrs_list.append(attr)
+								logging.debug("Obj %s not synchronized : %s not same value(s)" % (obj,','.join(attrs_list)))
+								touch=True
+					if len(attrs_list)>0:
+						not_sync[srv].append("%s (%s)" % (obj,','.join(attrs_list)))
+				else:
+					logging.debug("Obj %s not synchronized : %s <-> %s" % (obj,LdapObjects[options.provider][obj],LdapObjects[srv][obj]))
+					not_sync[srv].append(obj)
+			if touch and options.touch:
+				orig_value=[]
+				if options.touch in LdapObjects[options.provider][obj]:
+					orig_value=LdapObjects[options.provider][obj][options.touch]
+				LdapServers[options.provider].touch_object(obj,options.touch,orig_value)
+		else:
+			logging.debug('Obj %s : not found on %s' % (obj,srv))
+			not_found[srv].append(obj)
+			if options.touch:
+				orig_value=[]
+				if options.touch in LdapObjects[options.provider][obj]:
+					orig_value=LdapObjects[options.provider][obj][options.touch]
+				LdapServers[options.provider].touch_object(obj,options.touch,orig_value)
+
+for obj in LdapObjects[options.consumer]:
+	logging.debug('Check obj %s of consumer' % obj)
+	if obj not in LdapObjects[options.provider]:
+		logging.debug('Obj %s : not found on provider' % obj)
+		not_found[options.provider].append(obj)
+
+if options.nagios:
+	errors=[]
+
+	if not options.nocheckcontextcsn:
+		if not LdapServersCSN[options.provider]:
+			errors.append('ContextCSN of LDAP server provider could not be found')
+		else:
+			for srv in LdapServersCSN:
+				if srv==options.provider:
+					continue
+				if not LdapServersCSN[srv]:
+					errors.append('ContextCSN of %s not found' % srv)
+				elif LdapServersCSN[srv]!=LdapServersCSN[options.provider]:
+					errors.append('ContextCSN of %s not the same of provider' % srv)
+
+	if len(not_found[options.consumer])>0:
+		errors.append("%s not found object(s) on consumer" % len(not_found[options.consumer]))
+	if len(not_found[options.provider])>0:
+		errors.append("%s not found object(s) on provider" % len(not_found[options.provider]))
+	if len(not_sync[options.consumer])>0:
+		errors.append("%s not synchronized object(s) on consumer" % len(not_sync[options.consumer]))
+	if len(errors)>0:
+		print "CRITICAL : "+', '.join(errors)
+		sys.exit(2)
+	else:
+		print 'OK : consumer and provider are synchronized'
+		sys.exit(0)
+else:
+	noerror=True
+	for srv in servers:
+		if not options.nocheckcontextcsn:
+			if not LdapServersCSN[options.provider]:
+				logging.warning('ContextCSN of LDAP server provider could not be found')
+				noerror=False
+			else:
+				for srv in LdapServersCSN:
+					if srv==options.provider:
+						continue
+					if not LdapServersCSN[srv]:
+						logging.warning('ContextCSN of %s not found' % srv)
+						noerror=False
+					elif LdapServersCSN[srv]!=LdapServersCSN[options.provider]:
+						logging.warning('ContextCSN of %s not the same of provider' % srv)
+						noerror=False
+
+		if len(not_found[srv])>0:
+			logging.warning('Not found objects on %s :\n  - %s' % (srv,'\n  - '.join(not_found[srv])))
+			noerror=False
+		if len(not_sync[srv])>0:
+			logging.warning('Not sync objects on %s : %s' % (srv,'\n  - '.join(not_sync[srv])))
+			noerror=False
+	
+	if noerror:
+		logging.info('No sync problem detected')

@@ -1,0 +1,33 @@
+# Use this as basis for OID's to follow:
+# TODO: replace this base OID with IANA registered # for use:
+objectidentifier sampleBase 34193.99
+# Attributes:
+objectidentifier sampleAtId sampleBase:1
+# Object Classes:
+objectidentifier sampleObId sampleBase:2
+
+######################################################################
+## 1. Sample attribute definitions
+######################################################################
+
+# A1: Replication Zone Name, type STRING, MULTI VALUE
+attributetype ( sampleAtId:1
+    NAME 'sampleZone'
+    DESC 'Sample Zone'
+    EQUALITY caseIgnoreMatch
+    SUBSTR caseIgnoreSubstringsMatch
+    SYNTAX 1.3.6.1.4.1.1466.115.121.1.15 )
+
+######################################################################
+## 2. Sample Structural object class definitions
+######################################################################
+
+## OC1: Sample Structural Object Class
+objectclass ( sampleObId:1
+    NAME 'samplePerson'
+    DESC 'Sample Users Structural Object Class'
+        SUP ( inetOrgPerson )
+    STRUCTURAL
+    MUST ()
+    MAY ( sampleZone )
+    )

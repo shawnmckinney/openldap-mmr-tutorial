@@ -1,0 +1,212 @@
+#-----------------------------------------------------------------------
+# This is Replica C Config ---------------------------------------------
+# Main configuration for a replica
+# See slapd.conf(5) for details on configuration options.
+# This file should NOT be world readable.
+#-----------------------------------------------------------------------
+#-----------------------------------------------------------------------
+# Schema files
+#-----------------------------------------------------------------------
+include     /etc/openldap/schema/core.schema
+include     /etc/openldap/schema/cosine.schema
+include     /etc/openldap/schema/inetorgperson.schema
+include     /etc/openldap/schema/rfc2307bis.schema
+include     /etc/openldap/schema/sudo.schema
+include     /etc/openldap/schema/ppolicy.schema
+include     /etc/openldap/schema/sample.schema
+
+#-----------------------------------------------------------------------
+# TLS Setup Section
+#-----------------------------------------------------------------------
+#
+# TLSCACertificateFile <filename>
+#   Specifies the file that contains certificates for all
+#   of the Certificate Authorities that slapd will
+#   recognize.
+TLSCACertificateFile "/etc/openldap/certs/ca-cert.pem"
+
+#
+# TLSCertificateFile <filename>
+#   Specifies the  file  that  contains  the  slapd  server
+#   certificate.
+TLSCertificateFile "/etc/openldap/certs/server-cert.pem"
+
+#
+# TLSCertificateKeyFile <filename>
+#   Specifies the  file that contains the slapd server
+#   private  key that matches the certificate stored in the
+#   TLSCertificateFile file.  Currently, the private key
+#   must not be protected  with  a password, so it is of
+#   critical importance that it is protected carefully.
+TLSCertificateKeyFile "/etc/openldap/certs/server-key.pem"
+
+#
+# TLSCipherSuite  <cipher-suite-spec>
+#   Permits configuring  what  ciphers  will  be  accepted  and  the
+#   preference   order.   <cipher-suite-spec>  should  be  a  cipher
+#   specification for the TLS library in use  (OpenSSL,  GnuTLS,  or
+#   Mozilla NSS).
+TLSCipherSuite HIGH:-SSLv3
+TLSVerifyClient  try
+
+# Only accept TLS 1.2
+TLSProtocolMin 3.3
+
+# Only accept TLS connections
+#security tls=128
+
+#-----------------------------------------------------------------------
+# Files in which to store the process id and startup arguments.
+# These files are needed by the init scripts, so only change
+# these if you are prepared to edit those scripts as well.
+#-----------------------------------------------------------------------
+pidfile                 "/var/run/openldap/slapd-c.pid"
+argsfile                "/var/run/openldap/slapd-c.args"
+
+# Symas OpenLDAP supports threaded slapadd.  This is only useful if running
+# slapadd on a multi-cpu box.  Generally, assign 1 thread per
+# cpu, so if it is a 4 cpu box, use tool-threads 4.  This
+# specifically affects the creation of index databases, so if
+# your database has fewer indices than CPUs, set it to the
+# number of indices.
+#tool-threads 2
+
+#threads 4
+
+#-----------------------------------------------------------------------
+# Choose the directory for loadable modules.
+#-----------------------------------------------------------------------
+modulepath      "/usr/lib64/openldap"
+
+# Uncomment the moduleloads as needed to enable additional
+# functionality when configured. NOTE: We package many
+# more modules options than those found below.
+moduleload      back_mdb.la
+moduleload      back_monitor.la
+moduleload      pw-sha2
+moduleload      ppolicy.la
+
+#-----------------------------------------------------------------------
+# LOGGING
+#-----------------------------------------------------------------------
+loglevel     stats sync
+
+#######################################################################
+# Primary Database
+#######################################################################
+database        mdb
+suffix          "dc=example,dc=com"
+rootdn          "cn=Manager,dc=example,dc=com"
+rootpw          secret
+
+limits dn.exact="cn=svcact,ou=admin,dc=example,dc=com" time.soft=unlimited time.hard=unlimited size.soft=unlimited size.hard=unlimited
+
+#-----------------------------------------------------------------------
+# Sample access control policy:
+# Directives that implement this policy:
+#-----------------------------------------------------------------------
+# This is a read-only replica, capable of supporting user authentication and group validations.
+# Updates are possible via referrals but not handled in this example config.
+# Fields not meant for reading/writing by anyone
+access to attrs=userPassword
+        by anonymous auth
+
+# Service Account user can read everything under suffix.
+access to *
+        by dn.exact="cn=svcact,ou=admin,dc=example,dc=com" read
+        by * break
+
+# Authenticated connections have read access to themselves.
+access to dn.subtree="ou=People,dc=example,dc=com"
+        by self read
+
+#-----------------------------------------------------------------------
+# ACL section end
+#-----------------------------------------------------------------------
+
+# This is a replica, tune for speed, not durability
+dbnosync
+checkpoint      100 5
+
+#-----------------------------------------------------------------------
+# Indices to maintain
+#-----------------------------------------------------------------------
+index   default         eq
+# mandatory
+index   objectClass
+# replication
+index   entryCSN,entryUUID
+# regular operation
+index   uidNumber,gidNumber,memberUid
+index   member,owner
+index   sampleZone
+index   cn,sn,givenName eq,sub
+index   uid,mail        eq,sub
+index   ou              eq,sub
+
+# The database directory MUST exist prior to running slapd AND
+# should only be accessible by the slapd/tools. Mode 700 recommended.
+# One directory will be needed for each backend, so you should
+# create a subdirectory beneath /var/lib/openldap for each
+# new backend.
+directory       "/var/lib/ldap/sample-c"
+
+# Here we specify the maximum on-disk size of the database. It is
+# Recommended to set this near the expected free-space availability
+# for the machine. This paramiter is not pre-allocated and simply
+# represents the upward limit to which the database will be allowed
+# to grow. Note: Specified in *bytes*.
+maxsize 1073741824
+
+# SYNCREPL
+syncrepl
+        rid=21
+        provider=ldap://slapdtrain:389
+        bindmethod=sasl
+        saslmech=external
+        starttls=yes
+        tls_cacert=/etc/openldap/certs/ca-cert.pem
+        tls_cert=/etc/openldap/certs/server-cert.pem
+        tls_key=/etc/openldap/certs/server-key.pem
+        tls_reqcert=demand
+        type=refreshAndPersist
+        searchbase="dc=example,dc=com"
+        filter="(|(sampleZone=Z1)(!(objectClass=samplePerson)))"
+        scope=sub
+        schemachecking=on
+        retry="60 5 300 +"
+        network-timeout=30
+        keepalive=180:30:60
+        sizeLimit=unlimited
+        timelimit=unlimited
+
+syncrepl
+        rid=22
+        provider=ldap://slapdtrain:390
+        bindmethod=sasl
+        saslmech=external
+        starttls=yes
+        tls_cacert=/etc/openldap/certs/ca-cert.pem
+        tls_cert=/etc/openldap/certs/server-cert.pem
+        tls_key=/etc/openldap/certs/server-key.pem
+        tls_reqcert=demand
+        type=refreshAndPersist
+        searchbase="dc=example,dc=com"
+        filter="(|(sampleZone=Z1)(!(objectClass=samplePerson)))"
+        scope=sub
+        schemachecking=on
+        retry="60 5 300 +"
+        network-timeout=30
+        keepalive=180:30:60
+        sizeLimit=unlimited
+        timelimit=unlimited
+
+#-----------------------------------------------------------------------
+# ppolicy overlay
+#-----------------------------------------------------------------------
+overlay ppolicy
+
+#######################################################################
+# Monitor database
+#######################################################################
+database        monitor

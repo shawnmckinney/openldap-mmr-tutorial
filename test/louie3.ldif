@@ -1,0 +1,7 @@
+version: 1
+
+dn: uid=louie,ou=People,dc=example,dc=com
+changetype: modify
+delete: sampleZone
+sampleZone: Z1
+

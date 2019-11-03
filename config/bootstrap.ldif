@@ -1,0 +1,190 @@
+dn: dc=example,dc=com
+objectClass: organization
+objectClass: dcObject
+dc: example
+o: OpenLDAP Sample Suffix
+
+dn: ou=People,dc=example,dc=com
+objectClass: organizationalUnit
+ou: People
+description: Sample People Container
+
+dn: ou=Groups,dc=example,dc=com
+objectClass: organizationalUnit
+ou: Groups
+description: Sample Groups
+
+dn: ou=admin,dc=example,dc=com
+objectClass: organizationalUnit
+ou: admin
+description: Contains administrative accounts for service access.
+
+dn: cn=replicator, ou=admin,dc=example,dc=com
+objectClass: person
+cn: replicator
+description: Replicator user
+sn: Replicator User
+
+dn: cn=svcact,ou=admin,dc=example,dc=com
+objectClass: top
+objectClass: person
+description: A sample service account.
+cn: svcact
+sn: service
+userPassword: {SSHA}rUk6l6gxUKoMiVCry2aOFijwBSCmayKI
+
+dn: ou=Sudoers,dc=example,dc=com
+objectClass: organizationalUnit
+ou: Sudoers
+description: A sample sudoers container.
+
+dn: ou=HostGroups,dc=example,dc=com
+objectClass: organizationalUnit
+ou: HostGroups
+description: S sample host groups container,
+
+dn: cn=sampleUsers,ou=Groups,dc=example,dc=com
+objectClass: groupOfMembers
+objectClass: posixGroup
+objectClass: top
+cn: sampleUsers
+gidNumber: 2001
+description: The sample group is the default for all sample users.
+
+dn: cn=sampleAdmins,ou=Groups,dc=example,dc=com
+objectClass: groupOfMembers
+objectClass: posixGroup
+objectClass: top
+cn: sampleAdmin
+gidNumber: 2002
+description: This group contains sample project test administrators
+memberUid: huey
+
+dn: cn=sampleAuditors,ou=Groups,dc=example,dc=com
+objectClass: groupOfMembers
+objectClass: posixGroup
+objectClass: top
+cn: sampleAuditor
+gidNumber: 2003
+description: Contains test auditors
+memberUid: louie
+
+dn: uid=huey,ou=People,dc=example,dc=com
+objectClass: posixAccount
+objectClass: samplePerson
+objectClass: top
+cn: Hubert Duck
+gidNumber: 2001
+homeDirectory: /home/huey
+sn: duck
+uid: huey
+uidNumber: 10097
+sampleZone: Z1
+sampleZone: Z2
+description: Test admin
+mail: huey@ducktales.com
+userPassword: {SSHA}rUk6l6gxUKoMiVCry2aOFijwBSCmayKI
+
+dn: uid=dewey,ou=People,dc=example,dc=com
+objectClass: posixAccount
+objectClass: samplePerson
+objectClass: top
+cn: Deuteronomy Duck
+gidNumber: 2001
+homeDirectory: /home/dewey
+sn: Duck
+uid: dewey
+uidNumber: 10098
+sampleZone: Z1
+description: User
+mail: dewey@ducktales.com
+userPassword: {SSHA}7wtNbdp7oRpb5xs/X4k9iufCcOvMZ1tF
+
+dn: uid=louie,ou=People,dc=example,dc=com
+objectClass: posixAccount
+objectClass: samplePerson
+objectClass: top
+cn: Llewellyn Duck
+gidNumber: 2001
+homeDirectory: /home/louie
+sn: Duck
+uid: louie
+uidNumber: 10099
+sampleZone: Z2
+description: Auditor
+mail: louie@ducktales.com
+userPassword: {SSHA}FREPiXGzhahktUESqVp8gfkFrcta7tjA
+
+dn: cn=sudoUser,ou=Sudoers,dc=example,dc=com
+objectClass: sudoRole
+objectClass: top
+cn: sudoUser
+description: Mock User Priv
+sudoCommand: /bin/whoami
+sudoHost: +appservers
+sudoUser: %sampleUsers
+
+dn: cn=sudoAdmin,ou=Sudoers,dc=example,dc=com
+objectClass: sudoRole
+objectClass: top
+cn: sudoAdmin
+description: These users have admin level access of machines.
+sudoCommand: ALL
+sudoCommand: !/bin/bin/su -
+sudoCommand: !/bin/rm
+sudoCommand: !/bin/vi
+sudoCommand: !/bin/whoami
+sudoHost: +appservers
+sudoUser: %sampleAdmins
+
+dn: cn=sudoAudit,ou=Sudoers,dc=example,dc=com
+objectClass: sudoRole
+objectClass: top
+cn: sudoAudit
+description: Can view files
+sudoCommand: /bin/cat
+sudoCommand: /usr/bin/find
+sudoCommand: /usr/bin/ls
+sudoHost: +appservers
+sudoUser: %sampleAuditors
+
+dn: cn=ldap,ou=HostGroups,dc=example,dc=com
+objectClass: nisNetgroup
+cn: ldap
+description: The ldap machines
+nisNetgroupTriple: (samplema,,)
+nisNetgroupTriple: (samplemb,,)
+nisNetgroupTriple: (samplecr1a,,)
+nisNetgroupTriple: (samplez1b,,)
+nisNetgroupTriple: (samplecr2a,,)
+nisNetgroupTriple: (samplecr2b,,)
+nisNetgroupTriple: (sapmplez1a,,)
+
+dn: cn=appservers,ou=HostGroups,dc=example,dc=com
+objectClass: nisNetgroup
+cn: appservers
+description: these are the mock app servers
+nisNetgroupTriple: (ubuntu-sssd-testing,,)
+nisNetgroupTriple: (centos7-ssd-testing,,)
+nisNetgroupTriple: (localhost,,)
+
+dn: ou=Policies,dc=example,dc=com
+objectClass: organizationalUnit
+ou: Policies
+description: Sample Policies
+
+dn: cn=default,ou=Policies,dc=example,dc=com
+objectClass: pwdPolicy
+objectClass: person
+objectClass: top
+cn: default
+sn: default
+pwdAttribute: userPassword
+pwdFailureCountInterval: 600
+pwdInHistory: 5
+pwdLockout: TRUE
+pwdLockoutDuration: 0
+pwdMaxFailure: 5
+pwdMinLength: 6
+pwdMustChange: TRUE
+

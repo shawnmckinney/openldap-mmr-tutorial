@@ -1,0 +1,310 @@
+#-----------------------------------------------------------------------
+# This is Master B Config ----------------------------------------------
+# See slapd.conf(5) for details on configuration options.
+# This file should NOT be world readable.
+#-----------------------------------------------------------------------
+# The other server will have a serverid set to 2
+serverid        2
+
+#-----------------------------------------------------------------------
+# Schema files. Note that not all of these schemas co-exist peacefully.
+# Use only those you need and leave the rest commented out.
+#-----------------------------------------------------------------------
+include     /etc/openldap/schema/core.schema
+include     /etc/openldap/schema/cosine.schema
+include     /etc/openldap/schema/inetorgperson.schema
+include     /etc/openldap/schema/rfc2307bis.schema
+include     /etc/openldap/schema/sudo.schema
+include     /etc/openldap/schema/ppolicy.schema
+include     /etc/openldap/schema/sample.schema
+
+#-----------------------------------------------------------------------
+# TLS Setup Section
+#-----------------------------------------------------------------------
+#
+# TLSCACertificateFile <filename>
+#   Specifies the file that contains certificates for all
+#   of the Certificate Authorities that slapd will
+#   recognize.
+TLSCACertificateFile "/etc/openldap/certs/ca-cert.pem"
+
+#
+# TLSCertificateFile <filename>
+#   Specifies the  file  that  contains  the  slapd  server
+#   certificate.
+TLSCertificateFile "/etc/openldap/certs/server-cert.pem"
+
+#
+# TLSCertificateKeyFile <filename>
+#   Specifies the  file that contains the slapd server
+#   private  key that matches the certificate stored in the
+#   TLSCertificateFile file.  Currently, the private key
+#   must not be protected  with  a password, so it is of
+#   critical importance that it is protected carefully.
+TLSCertificateKeyFile "/etc/openldap/certs/server-key.pem"
+
+#
+# TLSCipherSuite  <cipher-suite-spec>
+#   Permits configuring  what  ciphers  will  be  accepted  and  the
+#   preference   order.   <cipher-suite-spec>  should  be  a  cipher
+#   specification for the TLS library in use  (OpenSSL,  GnuTLS,  or
+#   Mozilla NSS).
+TLSCipherSuite HIGH:-SSLv3
+TLSVerifyClient  try
+
+# Only accept TLS 1.2
+TLSProtocolMin 3.3
+
+# Only accept TLS connections
+#security tls=128
+
+#-----------------------------------------------------------------------
+# Files in which to store the process id and startup arguments.
+# These files are needed by the init scripts, so only change
+# these if you are prepared to edit those scripts as well.
+#-----------------------------------------------------------------------
+pidfile                 "/var/run/openldap/slapd-b.pid"
+argsfile                "/var/run/openldap/slapd-b.args"
+
+# OpenLDAP supports threaded slapadd.  This is only useful if running
+# slapadd on a multi-cpu box.  Generally, assign 1 thread per
+# cpu, so if it is a 4 cpu box, use tool-threads 4.  This
+# specifically affects the creation of index databases, so if
+# your database has fewer indices than CPUs, set it to the
+# number of indices.
+#tool-threads 2
+#threads 4
+
+#-----------------------------------------------------------------------
+# Choose the directory for loadable modules.
+#-----------------------------------------------------------------------
+modulepath      "/usr/lib64/openldap"
+
+# Uncomment the moduleloads as needed to enable additional
+# functionalityi when configured. NOTE: We package many
+# more modules options than those found below.
+moduleload      accesslog.la
+moduleload      back_mdb.la
+moduleload      back_monitor.la
+moduleload      pw-sha2
+moduleload      refint
+moduleload      sssvlv
+moduleload      syncprov.la
+moduleload      ppolicy.la
+
+#-----------------------------------------------------------------------
+# LOGGING
+#-----------------------------------------------------------------------
+loglevel     stats sync
+
+# Id mapping:
+authz-regexp "email=student@ldap.org,cn=([^,]*),ou=Training,o=Symas,l=Sofia,st=Sofia City,c=BG" "cn=replicator,ou=admin,dc=example,dc=com"
+
+#######################################################################
+# Main Database (lmdb-backed)
+#######################################################################
+database        mdb
+suffix          "dc=example,dc=com"
+rootdn          "cn=Manager,dc=example,dc=com"
+
+# Cleartext passwords, especially for the rootdn, should
+# be avoided. See slappasswd(8) and slapd.conf(5) for details describing
+# the creation of encrypted passwords.
+rootpw          secret
+
+limits dn.exact="cn=replicator,ou=admin,dc=ariba,dc=com" time.soft=unlimited time.hard=unlimited size.soft=unlimited size.hard=unlimited
+
+#-----------------------------------------------------------------------
+# Sample access control policy:
+#       Allow self write access
+#       Allow authenticated users read access
+#       Allow anonymous users to authenticate
+# Directives that implement this policy:
+#-----------------------------------------------------------------------
+
+# ppolicy operational attributes propagated from leaf nodes
+access to attrs=pwdAccountLockedTime
+    by dn.exact="cn=replicator,ou=admin,dc=example,dc=com" manage
+
+access to attrs=pwdFailureTime,pwdGraceUseTime
+    by dn.exact="cn=replicator,ou=admin,dc=example,dc=com" manage
+
+# Replicator should have read access to everyting, including
+# authentication related attributes.
+access to *
+        by dn.exact="cn=replicator,ou=admin,dc=example,dc=com" read
+        by anonymous auth break
+        by * break
+
+# Protect the userPassword attribute against illegal access
+access to attrs=userPassword
+        by anonymous auth
+        by self =w
+        by * none
+
+access to *
+        by self write
+        by * none
+
+#-----------------------------------------------------------------------
+# ACL section end
+#-----------------------------------------------------------------------
+
+#-----------------------------------------------------------------------
+# Indices to maintain
+#-----------------------------------------------------------------------
+index   default         eq
+# mandatory
+index   objectClass
+# replication
+index   entryCSN,entryUUID
+# provisioning (eq implies ordered index for this one)
+# regular operation
+index   uidNumber,gidNumber,memberUid
+index   member,owner
+index   sampleZone
+index   cn,sn,givenName eq,sub
+index   uid,mail        eq,sub
+index   ou              eq,sub
+
+# The database directory MUST exist prior to running slapd AND
+# should only be accessible by the slapd/tools. Mode 700 recommended.
+# One directory will be needed for each backend, so you should
+# create a subdirectory beneath /var/symas/openldap-data for each
+# new backend. This is also where the DB_CONFIG file needs to be
+# placed.
+directory       "/var/lib/ldap/sample-b"
+
+# Here we specify the maximum on-disk size of the database. It is
+# Recommended to set this near the expected free-space availability
+# for the machine. This paramiter is not pre-allocated and simply
+# represents the upward limit to which the database will be allowed
+# to grow. Note: Specified in *bytes*.
+maxsize 1073741824
+
+# SYNCREPL
+syncrepl
+        rid=11
+        provider=ldap://slapdtrain:390
+        bindmethod=sasl
+        saslmech=external
+        starttls=yes
+        tls_cacert=/etc/openldap/certs/ca-cert.pem
+        tls_cert=/etc/openldap/certs/server-cert.pem
+        tls_key=/etc/openldap/certs/server-key.pem
+        tls_reqcert=demand
+        type=refreshAndPersist
+        searchbase="dc=example,dc=com"
+        filter="(objectclass=*)"
+        scope=sub
+        schemachecking=on
+        retry="60 5 300 +"
+        network-timeout=30
+        keepalive=180:30:60
+        logbase="cn=accesslog"
+        logfilter="(&(objectClass=auditWriteObject)(reqResult=0))"
+        syncdata=accesslog
+        sizeLimit=unlimited
+        timelimit=unlimited
+
+# SYNCREPL
+syncrepl
+        rid=12
+        provider=ldap://slapdtrain:389
+        bindmethod=sasl
+        saslmech=external
+        starttls=yes
+        tls_cacert=/etc/openldap/certs/ca-cert.pem
+        tls_cert=/etc/openldap/certs/server-cert.pem
+        tls_key=/etc/openldap/certs/server-key.pem
+        tls_reqcert=demand
+        type=refreshAndPersist
+        searchbase="dc=example,dc=com"
+        filter="(objectclass=*)"
+        scope=sub
+        schemachecking=on
+        retry="60 5 300 +"
+        network-timeout=30
+        keepalive=180:30:60
+        logbase="cn=accesslog"
+        logfilter="(&(objectClass=auditWriteObject)(reqResult=0))"
+        syncdata=accesslog
+        sizeLimit=unlimited
+        timelimit=unlimited
+
+# ENABLE MIRROR MODE
+mirrormode     TRUE
+
+#-----------------------------------------------------------------------
+# OVERLAY [SYNCPROV]
+#-----------------------------------------------------------------------
+overlay             syncprov
+syncprov-checkpoint 100 10
+syncprov-sessionlog 10000
+syncprov-reloadhint TRUE
+
+#----------------------------------------------------------------------- 
+# OVERLAY [ACCESSLOG]
+#-----------------------------------------------------------------------
+overlay     accesslog
+logdb       cn=accesslog
+logops      writes
+logsuccess  TRUE
+logpurge 24:00 01+00:00
+ 
+#-----------------------------------------------------------------------
+# OVERLAY [REFINT]
+#-----------------------------------------------------------------------
+overlay refint
+refint_attributes member owner 
+
+#-----------------------------------------------------------------------
+# SSSVLV overlay
+#-----------------------------------------------------------------------
+overlay sssvlv
+
+#-----------------------------------------------------------------------
+# ppolicy overlay
+#-----------------------------------------------------------------------
+overlay ppolicy
+ppolicy_hash_cleartext
+
+#######################################################################
+# Accesslog database
+#######################################################################
+database        mdb
+directory       /var/lib/ldap/accesslog-b
+maxsize         5120000
+suffix          "cn=accesslog"
+rootdn          "cn=accesslog"
+index           default eq
+index           objectClass,entryCSN,entryUUID,reqEnd,reqResult,reqStart
+
+limits dn.exact="cn=replicator,ou=admin,dc=example,dc=com" time.soft=unlimited time.hard=unlimited size.soft=unlimited size.hard=unlimited
+
+#-----------------------------------------------------------------------
+# Sample access control policy:
+#       Allow replicas to read
+# Directives that implement this policy:
+#-----------------------------------------------------------------------
+
+access to *
+    by dn.base="cn=replicator,ou=admin,dc=example,dc=com" read
+
+#-----------------------------------------------------------------------
+# ACL section end
+#-----------------------------------------------------------------------
+
+#-----------------------------------------------------------------------
+# AccessLog overlay (syncprov)
+overlay syncprov
+syncprov-nopresent  TRUE
+syncprov-reloadhint TRUE
+syncprov-checkpoint 100 10
+syncprov-sessionlog 10000
+
+#######################################################################
+# Monitor database
+#######################################################################
+database        monitor
+
