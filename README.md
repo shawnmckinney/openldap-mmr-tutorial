@@ -5,9 +5,9 @@
 
 ## Follow these steps:
 
-### 1. Prepare Virtual Box
+### 1. Prepare Virtual Box (or vmware)
 
-[README-configure-vb-demo-env](./README-configure-vb-demo-env.md)
+[README-configure-vb-demo-env](README-IMPORT-VM.md)
 
 ### 2. Install OpenLDAP Masters
 
