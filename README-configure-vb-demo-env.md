@@ -80,6 +80,10 @@ to 250% to make the screen larger:
 
 <img src="images/58-network-config.png" height="275">
 
+18. Click Begin Installation:
+
+<img src="images/60-begin-installation-update.png" height="275">
+
 18. While the installation of Centos 7 continues, set the root password and set up a first user account:
 
 <img src="images/65-set-root-pw.png" height="100">
