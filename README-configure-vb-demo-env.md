@@ -87,3 +87,15 @@ to 250% to make the screen larger:
 18. While the installation of Centos 7 continues, set the root password and set up a first user account:
 
 <img src="images/65-set-root-pw.png" height="100">
+
+19. After the installation has been completed, you need to reboot the VM:
+
+<img src="images/70-reboot.png" height="100">
+
+20. This brings you to the login screen:
+
+<img src="images/75-login.png" height="100">
+
+21. To shutdown your new VM, click on Machine in the toolbar, then ACPI-Shutdown:
+
+<img src="images/80-shutdown.png" height="100">
