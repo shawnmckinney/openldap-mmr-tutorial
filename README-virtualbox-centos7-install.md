@@ -7,8 +7,8 @@
 
 ## Install VirtualBox
 
-1. From the files copied to your computer, double-click on the VirtualBox-6.0.14-133895-OSX.dmg file.
-2. Follow the instructions to install VirtualBox
+1. From the files copied to your computer, double-click on the VirtualBox install file for your platform
+2. Follow the prompts to install VirtualBox
 
 ## Create New VM
 
@@ -84,18 +84,18 @@ to 250% to make the screen larger:
 
 <img src="images/60-begin-installation-update.png" height="275">
 
-18. While the installation of Centos 7 continues, set the root password and set up a first user account:
+19. While the installation of Centos 7 continues, set the root password and set up a first user account:
 
 <img src="images/65-set-root-pw.png" height="100">
 
-19. After the installation has been completed, you need to reboot the VM:
+20. After the installation has been completed, you need to reboot the VM:
 
 <img src="images/70-reboot.png" height="100">
 
-20. This brings you to the login screen:
+21. This brings you to the login screen:
 
 <img src="images/75-login.png" height="100">
 
-21. To shutdown your new VM, click on Machine in the toolbar, then ACPI-Shutdown:
+22. To shutdown your new VM, click on Machine in the toolbar, then ACPI-Shutdown:
 
 <img src="images/80-shutdown.png" height="100">
