@@ -26,13 +26,7 @@ yum -y install git
 Install the project from the git repo:
 
 ```
-git clone https://gitlab.symas.net/smckinney/openldap-mmr-tutorial.git
-```
-
-or 
-
-```
-git clone git@gitlab.symas.net:smckinney/openldap-mmr-tutorial.git
+https://github.com/shawnmckinney/openldap-mmr-tutorial.git
 ```
 
 ## Installation
