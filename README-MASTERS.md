@@ -215,7 +215,7 @@ ldapmodify -a -x -D "cn=manager,dc=example,dc=com" -w secret -H ldap://slapdtrai
 b. Verify the other master receives the update:
 
 ```
-ldapsearch -x -LLL -H ldap://slapdtrain:389 -D "cn=manager,dc=example,dc=com" -w secret -s sub -b 'uid=Huey,ou=People,dc=example,dc=com' objectclass="*" -E '!sync=rp'
+ldapsearch -x -LLL -H ldap://slapdtrain:389 -D "cn=manager,dc=example,dc=com" -w secret -s sub -b 'uid=Louie,ou=People,dc=example,dc=com' objectclass="*" -E '!sync=rp'
 ```
 
 c. Context CSN Verification:
