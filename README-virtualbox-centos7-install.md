@@ -1,4 +1,4 @@
-# Copyright (c) 2002-2015 by Symas Corporation
+# Copyright (c) 2002-2019 by Symas Corporation
 # All rights reserved.
 
 # Configure VirtualBox Demo Environment
